@@ -55,8 +55,9 @@ class ConsoleDashWidget(IconToolButton):
         warn_icon = ['bg-yellow.svg', 'ic-console.svg', 'ol-warn-badge.svg']
         err_icon = ['bg-red.svg', 'ic-console.svg', 'ol-err-badge.svg']
         stale_icon = ['bg-grey.svg', 'ic-console.svg', 'ol-stale-badge.svg']
+        noinfo_icon = ['bg-grey.svg', 'ic-console.svg']
 
-        icons = [ok_icon, warn_icon, err_icon, stale_icon]
+        icons = [ok_icon, warn_icon, err_icon, stale_icon, noinfo_icon]
 
         super(ConsoleDashWidget, self).__init__('Console Widget', icons, icon_paths=icon_paths)
 
@@ -79,6 +80,10 @@ class ConsoleDashWidget(IconToolButton):
         self._timer = QTimer()
         self._timer.timeout.connect(self._insert_messages)
         self._timer.start(100)
+
+        self._stall_timer = QTimer()
+        self._stall_timer.timeout.connect(self._stalled)
+        self._stalled()
 
         self._rospack = rospkg.RosPack()
         if self._console is None:
@@ -103,6 +108,9 @@ class ConsoleDashWidget(IconToolButton):
             self._show_console()
 
     def _insert_messages(self):
+        self._is_stale = False
+        self._stall_timer.start(5000)
+
         with QMutexLocker(self._mutex):
             msgs = self._message_queue
             self._message_queue = []
@@ -115,6 +123,13 @@ class ConsoleDashWidget(IconToolButton):
             self.update_rosout()
         except:
             pass
+
+    def _stalled(self):
+        self._stall_timer.stop()
+        self._is_stale = True
+        self.update_state(3)
+        self.setToolTip("Rosout: Stale\nNo message received on "
+                        "/rosout_agg in the last 5 seconds")
 
     def _message_cb(self, log_msg):
         if not self._console._paused:
@@ -153,6 +168,7 @@ class ConsoleDashWidget(IconToolButton):
 
         if (len(tooltip) == 0):
             tooltip = "Rosout: no recent activity"
+            self.update_state(4)
         else:
             tooltip = "Rosout: recent activity:" + tooltip
 
@@ -170,6 +186,7 @@ class ConsoleDashWidget(IconToolButton):
         if self._subscriber:
             self._subscriber.unregister()
         self._timer.stop()
+        self._stall_timer.stop()
 
     def save_settings(self, plugin_settings, instance_settings):
         self._console.save_settings(plugin_settings, instance_settings)
