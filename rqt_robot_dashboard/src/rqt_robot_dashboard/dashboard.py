@@ -31,8 +31,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from python_qt_binding.QtCore import QSize
-from python_qt_binding.QtGui import QToolBar
+from python_qt_binding.QtCore import QSize, Qt
+from python_qt_binding.QtGui import QToolBar, QGroupBox, QHBoxLayout
 from qt_gui.plugin import Plugin
 
 
@@ -58,18 +58,9 @@ class Dashboard(Plugin):
         self._main_widget.setWindowTitle(self.name)
         if context.serial_number() > 1:
             self._main_widget.setWindowTitle(self._main_widget.windowTitle() + (' (%d)' % context.serial_number()))
-        widgets = self.get_widgets()
 
-        self._widgets = []
-        for v in widgets:
-            for i in v:
-                try:
-                    self._main_widget.addWidget(i)
-                    self._widgets.append(i)
-                except:
-                    raise Exception("All widgets must be a subclass of QWidget!")
-
-            self._main_widget.addSeparator()
+        # Convert list of widgets into layout
+        self.add_widgets()
 
         # Display the dashboard
         context.add_toolbar(self._main_widget)
@@ -109,6 +100,41 @@ class Dashboard(Plugin):
         Most of the dashboard customization should be done here.
         If this function is not overriden the dashboard will display nothing.
 
-        :returns: List of lists containing dashboard widgets.
+        :returns: List of lists containing dashboard widgets, or list of lists
+                  containing a string followed by a list of dashboard widgets.
         """
         return []
+
+    def add_widgets(self):
+        """Add groups of widgets to _main_widget. Supports group labels.
+
+        This method can be reimplemented in order to customize appearances.
+        """
+        self._main_widget.addSeparator()
+        widgets = self.get_widgets()
+        self._widgets = [] # stores widgets which may need to be shut down when done
+        for group in widgets:
+            # Check for group label
+            if isinstance(group[0], str):
+                grouplabel, v = group
+                box = QGroupBox(grouplabel)
+                # Apply the center-label directive only for single-icon groups
+                if len(group[1]) == 1:
+                    box.setAlignment(Qt.AlignHCenter)
+            else:
+                box = QGroupBox()
+                #v = group[0] #TODO verify delete this
+            # Add widgets to QGroupBox
+            layout = QHBoxLayout()
+            for v in widgets:
+                for i in v:
+                    try:
+                        layout.addWidget(i)
+                        self._widgets.append(i)
+                    except:
+                        raise Exception("All widgets must be a subclass of QWidget!")
+
+            layout.activate()
+            box.setLayout(layout)
+            self._main_widget.addWidget(box)
+            self._main_widget.addSeparator()
